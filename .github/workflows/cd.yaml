@@ -24,7 +24,7 @@ jobs:
         run: mvn clean install
 
       - name: Build Docker image
-        run: docker build -t my-webapp:latest . 
+        run: docker build -t my-webapp:latest .
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
@@ -32,16 +32,29 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
-      # - name: Push Docker image to Docker Hub
-      #   run: docker push my-webapp:latest 
+      - name: Push Docker image to Docker Hub
+        run: docker push my-webapp:latest
 
-      - name: Deploy to AWS ECS 
+      - name: Deploy to AWS ECS
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: us-east-1
         run: |
-          # Assuming you have an ECS service and task definition setup
-          # Update the ECS service with the new Docker image
-          aws ecs update-service --cluster my-cluster --service my-service --force-new-deployment
+          # Describe the existing task definition
+          TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition my-webapp-task)
 
+          # Update the Docker image in the task definition JSON
+          TASK_DEFINITION=$(echo "$TASK_DEFINITION" | jq '.taskDefinition.containerDefinitions[0].image="workspacebychuka/my-webapp:latest"')
+
+          # Prepare the task definition JSON for registration
+          TASK_DEFINITION_JSON=$(echo "$TASK_DEFINITION" | jq '{ family: .taskDefinition.family, containerDefinitions: .taskDefinition.containerDefinitions, executionRoleArn: .taskDefinition.executionRoleArn, networkMode: .taskDefinition.networkMode, requiresCompatibilities: .taskDefinition.requiresCompatibilities, cpu: .taskDefinition.cpu, memory: .taskDefinition.memory, volumes: .taskDefinition.volumes }')
+
+          # Register the new task definition
+          aws ecs register-task-definition --cli-input-json file://<(echo "$TASK_DEFINITION_JSON")
+
+          # Get the latest task definition revision ARN
+          TASK_DEFINITION_ARN=$(aws ecs describe-task-definition --task-definition my-webapp-task --query 'taskDefinition.taskDefinitionArn' --output text)
+
+          # Update the ECS service to use the new task definition revision
+          aws ecs update-service --cluster my-cluster --service my-service --task-definition "$TASK_DEFINITION_ARN" --force-new-deployment
