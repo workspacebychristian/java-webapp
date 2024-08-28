@@ -28,4 +28,4 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: us-east-1
         run: |
-          aws s3 cp target/my-webapp.war s3://your-bucket-name/my-webapp.war
+          aws s3 cp target/my-webapp.war s3://chuka-buck/my-webapp.war
